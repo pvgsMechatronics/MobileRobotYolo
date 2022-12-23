@@ -17,8 +17,6 @@ class MobileRobot
     float v = 0; //escalar linear speed of the robot
     float w = 0; //angular speed of the robot on Z axis
     float theta = 0; //theta angle of the robot
-    float sum_error_v = 0; //integrator of state v
-    float sum_error_w = 0; //integrator of state w
 
     //control parameters 
     float K[4] = {0,0,0,0}; //gain vector of dynamic control
