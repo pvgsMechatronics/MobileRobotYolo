@@ -82,9 +82,6 @@ void setup(void)
     }
     else{
       server.send(200, "text/plain", "OK");
-      //float x, y;
-      //x = String(msg.substring(msg.indexOf("[") + 1, msg.indexOf(","))).toFloat();
-      //y = String(msg.substring(msg.indexOf(",") + 1, msg.indexOf("]"))).toFloat();
       cyberpunk.calibrate(N, pin[0], pin[1], pin[2], pin[3]);
     }    
   });
@@ -96,7 +93,7 @@ void setup(void)
 
 void loop(void) 
 {
-  //server.handleClient(); 
+  server.handleClient(); 
   cyberpunk.calibrate(0.5, 26, 27, 32, 33);
   cyberpunk.follow_path(0.5); //follow paths with 0.5 m/s on reference speed
 }
