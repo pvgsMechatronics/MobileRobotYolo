@@ -1,4 +1,5 @@
 from asyncio.windows_events import INFINITE
+import time
 import numpy as np
 from numpy import linalg as al
 from shapely import geometry as geo
@@ -31,8 +32,9 @@ def main(ids:list[int], confs:list[float], boxes:list[int], df:float, id_robot:i
         while(requests.get('192.168.2.200/path', args={"path":msg}) != "OK"):
             print("Sending path...")
         
-        while(msg != "Robot busy!"):
+        while(msg == "Robot busy!"):
             msg = requests.get('192.168.2.200/log')
+            time.sleep(1)
     except:
         print("Robot offline!")
         return
@@ -55,9 +57,9 @@ class Object:
 class Map:
     def __init__(self, id_robot:int, id_target:int, ds:float): 
         self.map_objects = np.array([], dtype=Object) #array of objects in the map
-        self.map_zones = np.array([], dtype=geo.Polygon) #array of polygons that represents the        self.id_target = id_target #id of target object in yolo custom dataset
+        self.map_zones = np.array([], dtype=geo.Polygon) #array of polygons that represents the influence zones in the map
         self.id_robot = id_robot #robot id in yolo custom dataset
-        self.id_target = id_target
+        self.id_target = id_target #target id in yolo custom dataset
         self.ds = ds #range of influence in the objects on the map
         self.robot_pos = np.array([-1,-1], dtype=float) #position of the robot in the map
         self.target_pos = np.array([-1,-1], dtype=float) #position of the target in the map
@@ -135,6 +137,7 @@ class Map:
         path = np.append(path, [end], axis=0)
         return path
 
+    
 def print_log(log):
     aux = np.fromstring(log, dtype=float, sep=',')
     x = np.array([], dtype=float)
@@ -176,124 +179,3 @@ def print_log(log):
     ax3.set_ylabel('u1 and u2 (V)')
     plt.title("Robot control dynamics")
     plt.show()       
-
-class Robot:
-    def __init__(self, K:list[float], KI:list[float], k:list[float], sat:float, T:float, d:float):
-        self.x = 0.0 #x position of the robot
-        self.y = 0.0 #y position of the robot
-        self.theta = 0.0 #theta position of the robot  
-        self.v = 0.0 #linear speed of the robot
-        self.w = 0.0 #angular speed of the robot
-        self.v_log = np.array([], dtype=float)
-        self.w_log = np.array([], dtype=float)
-        self.K = np.array(K)
-        self.KI = np.array(KI)
-        self.k = np.array(k)
-        self.u = np.array([0,0], dtype=float)
-        self.T = T
-        self.d = d 
-        self.sat = sat
-        self.sum_v = 0
-        self.sum_w = 0
-
-    def update_odometry(self):
-        #update states of the robot (simulation only)
-        self.x = self.x + self.T*(m.cos(self.theta)*self.v) 
-        self.y = self.y + self.T*(m.sin(self.theta)*self.v) 
-        self.theta = self.theta + self.T*self.w
-        plt.plot(self.x, self.y, marker="o", markersize=20)
-        self.v_log = np.append(self.v_log, self.v)
-        self.w_log = np.append(self.w_log, self.w)
-    
-    def control_path(self, v_ref, path:list[float]):
-        self.path = path
-        for i in range(len(self.path)-1):
-            x_ref = x_begin = self.path[i,0]
-            y_ref = y_begin = self.path[i,1]
-            x_end = self.path[i+1,0]
-            y_end = self.path[i+1,1]
-            theta_ref = m.atan2(y_end - y_begin, x_end - x_begin)
-
-            if (x_end < x_begin):
-                inv_x = True
-            else: 
-                inv_x = False
-            if (y_end < y_begin):
-                inv_y = True
-            else: 
-                inv_y = False
-
-            while (al.norm(np.array([x_end-self.x, y_end-self.y])) >= 0.01):  
-                x_ref = x_ref + v_ref*m.cos(theta_ref)*self.T
-                y_ref = y_ref + v_ref*m.sin(theta_ref)*self.T
-
-                if inv_x:
-                    if x_ref < x_end:
-                        x_ref = x_end
-                else:
-                    if x_ref > x_end:
-                        x_ref = x_end
-                if inv_y:
-                    if y_ref < y_end:
-                        y_ref = y_end
-                else:
-                    if y_ref > y_end:
-                        y_ref = y_end
-
-                vx = self.k[0]*(x_ref - self.x)
-                vy = self.k[1]*(y_ref - self.y)
-                self.v = vx*m.cos(self.theta) + vy*m.sin(self.theta)
-                self.w = -vx*m.sin(self.theta)/self.d + vy*m.cos(self.theta)/self.d
-                self.update_odometry()
-
-            self.v = 0
-            self.w = 0
-
-mapa = Map(0, 1, 0.15)
-cb = Robot([0,0,0,0],[0,0,0,0],[2,2],6,0.01,0.02)
-mapa.add_object(Object([[0.85,0.9],[0.85,1.1],[1.15,1.1],[1.15,0.9]], 0, 0, 1))
-mapa.add_object(Object([[2.05,0.65],[2.05,0.8],[2.25,0.8],[2.25,0.65]],5, 0, 1))
-mapa.add_object(Object([[2.00,0.60],[2.00,0.75],[2.3,0.75],[2.3,0.60]],5, 0, 1))
-mapa.add_object(Object([[1.98,0.82],[1.98,0.97],[2.2,0.97],[2.2,0.82]],7, 0, 1))
-mapa.add_object(Object([[2.1,0.88],[2.1,0.93],[2.15,0.93],[2.15,0.88]],7, 0, 1))
-mapa.add_object(Object([[2, 1],[2,1.1],[2.27,1.1],[2.27,1]],6,0,1))
-mapa.add_object(Object([[2.02, 0.98],[2.02,1.11],[2.25,1.11],[2.25,0.98]],6,0,1))
-mapa.add_object(Object([[2.05, 1.15],[2.05,1.32],[2.20,1.32],[2.20,1.15]],3,0,1))
-mapa.add_object(Object([[2.06, 1.22],[2.06,1.32],[2.22,1.32],[2.22,1.22]],3,0,1))
-mapa.add_object(Object([[1.95, 1.35],[1.95,1.60],[2.09,1.60],[2.09,1.35]],4,0,1))
-mapa.add_object(Object([[1.93, 1.25],[1.93,1.55],[2.15,1.55],[2.15,1.25]],1,0,1))
-mapa.add_object(Object([[2.8, 1.1],[2.8,1.3],[3,1.3],[3,1.1]],1,0,1))
-mapa.add_object(Object([[2.5, 0.6],[2.5,0.75],[2.76,0.75],[2.75,0.6]],2,0,1))
-
-mapa.remake_map()
-cb.x = mapa.robot_pos[1]
-cb.y = mapa.robot_pos[1]
-path = mapa.make_path()
-plt.plot(mapa.robot_pos[0],mapa.robot_pos[1], marker="o", markersize=20, markerfacecolor="black")
-plt.plot(mapa.target_pos[0],mapa.target_pos[1],  marker="x", markersize=20, markerfacecolor="red",color="red")
-for i in range(len(mapa.map_objects)):
-    x,y = mapa.map_objects[i].pos.exterior.xy
-    plt.plot(x,y, color='blue')
-for i in range(len(mapa.map_zones)):
-    x,y = mapa.map_zones[i].exterior.xy
-    plt.plot(x,y, color='green')
-for i in range(len(path)-1):
-    x = [path[i+1,0],path[i,0]]
-    y = [path[i+1,1],path[i,1]]
-    plt.plot(x,y, color='black')
-cb.control_path(0.5, path)
-plt.title("Robot Path")
-plt.xlabel("x")
-plt.ylabel("y")
-plt.grid(True)
-plt.show()
-np.savetxt("ambiente2v.txt", cb.v_log)
-np.savetxt("ambiente2w.txt", cb.w_log)
-#content = np.array2string(cb.v_log, precision=5, max_line_width=10000000)
-#filev = open("ambiente2v.txt", "w+")
-#filev.write(content)
-#filev.close()
-#content = np.array2string(cb.w_log, precision=5, max_line_width=10000000)
-#filew = open("ambiente2w.txt", "w+")
-#filew.write(content)
-#filew.close()
